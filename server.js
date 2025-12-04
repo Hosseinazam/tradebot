@@ -1,18 +1,18 @@
 // ==========================================
-// server.js - TradeBot + MongoDB
+// server.js - TradeBot ready for Render
 // ==========================================
 
 const express = require("express");
-const { MongoClient, ServerApiVersion } = require('mongodb');
-require('dotenv').config();  // برای خواندن متغیر محیطی WEBHOOK_SECRET
+const { MongoClient, ServerApiVersion } = require("mongodb");
+require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 
 // ----------------------
-// 1️⃣ اتصال به MongoDB
+// MongoDB Connect
 // ----------------------
-const uri = "mongodb+srv://tradebotuser:secret123@cluster0.pz0qrex.mongodb.net/tradebot?retryWrites=true&w=majority";
+const uri = process.env.MONGODB_URI;
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -25,68 +25,53 @@ const client = new MongoClient(uri, {
 let signalsCollection;
 
 async function connectDB() {
-    try {
-        await client.connect();
-        const db = client.db("tradebot"); // نام دیتابیس
-        signalsCollection = db.collection("signals"); // Collection سیگنال‌ها
-        console.log("MongoDB connected ✅");
-    } catch (err) {
-        console.error("MongoDB connection error:", err);
-    }
+  try {
+    await client.connect();
+    const db = client.db("tradebot");
+    signalsCollection = db.collection("signals");
+    console.log("MongoDB connected ✅");
+  } catch (err) {
+    console.error("MongoDB error:", err);
+  }
 }
 
 connectDB();
 
 // ----------------------
-// 2️⃣ وب‌هوک برای دریافت سیگنال
+// Secure Webhook
 // ----------------------
+const SECRET = process.env.WEBHOOK_SECRET;
+
 app.post("/webhook", async (req, res) => {
-    // بررسی توکن امنیتی
-    const token = req.headers['x-webhook-token'];
-    if(token !== process.env.WEBHOOK_SECRET)
-        return res.status(403).json({ error: "forbidden" });
+  const token = req.headers["x-webhook-token"];
+  if (token !== SECRET) {
+    return res.status(403).json({ error: "forbidden" });
+  }
 
-    const signal = req.body;
+  const signal = req.body;
 
-    try {
-        // ذخیره سیگنال در MongoDB
-        await signalsCollection.insertOne({
-            ...signal,
-            timestamp: new Date()
-        });
+  try {
+    await signalsCollection.insertOne({
+      ...signal,
+      timestamp: new Date()
+    });
 
-        console.log("Signal saved:", signal);
-        res.json({ status: "ok" });
-    } catch (err) {
-        console.error("Error saving signal:", err);
-        res.status(500).json({ error: "internal server error" });
-    }
+    console.log("Saved:", signal);
+
+    res.json({ status: "ok" });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "db error" });
+  }
 });
 
 // ----------------------
-// 3️⃣ صفحه تست ساده
+// Home test
 // ----------------------
 app.get("/", (req, res) => {
-    res.send("TradeBot Server is running ✅");
+  res.send("TradeBot Server Running ✔️");
 });
 
 // ----------------------
-// 4️⃣ اجرای سرور
-// ----------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT} ✅`);
-});
-{
-  "name": "tradebot",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "mongodb": "^4.1",
-    "dotenv": "^16.0.3"
-  }
-}
+app.listen(PORT, () => console.log("Server running on", PORT));
