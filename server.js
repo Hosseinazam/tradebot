@@ -1,18 +1,7 @@
-// ==========================================
-// server.js - TradeBot ready for Render
-// ==========================================
+const express = require('express');
+const { MongoClient, ServerApiVersion } = require('mongodb');
 
-const express = require("express");
-const { MongoClient, ServerApiVersion } = require("mongodb");
-require("dotenv").config();
-
-const app = express();
-app.use(express.json());
-
-// ----------------------
-// MongoDB Connect
-// ----------------------
-const uri = process.env.MONGODB_URI;
+const uri = "mongodb+srv://tradebotuser:secret123@cluster0.pz0qrex.mongodb.net/tradebot?retryWrites=true&w=majority";
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -25,53 +14,46 @@ const client = new MongoClient(uri, {
 let signalsCollection;
 
 async function connectDB() {
-  try {
-    await client.connect();
-    const db = client.db("tradebot");
-    signalsCollection = db.collection("signals");
-    console.log("MongoDB connected ✅");
-  } catch (err) {
-    console.error("MongoDB error:", err);
-  }
+    try {
+        await client.connect();
+        const db = client.db("tradebot");
+        signalsCollection = db.collection("signals");
+        console.log("MongoDB connected ✅");
+    } catch (err) {
+        console.error("MongoDB connection error:", err);
+    }
 }
 
 connectDB();
 
-// ----------------------
-// Secure Webhook
-// ----------------------
-const SECRET = process.env.WEBHOOK_SECRET;
+const fs = require('fs');
+const app = express();
+app.use(express.json());
 
-app.post("/webhook", async (req, res) => {
-  const token = req.headers["x-webhook-token"];
-  if (token !== SECRET) {
-    return res.status(403).json({ error: "forbidden" });
+const SECRET = process.env.WEBHOOK_SECRET || 'secret-1234567890';
+
+// endpoint TradingView -> POST JSON
+app.post('/webhook', async (req, res) => {
+  const auth = req.headers['x-webhook-token'] || req.headers['authorization'] || '';
+  if(auth !== SECRET) {
+    return res.status(403).json({error: 'forbidden'});
   }
 
-  const signal = req.body;
+  const payload = req.body;
+  console.log('got signal', payload);
 
   try {
-    await signalsCollection.insertOne({
-      ...signal,
-      timestamp: new Date()
-    });
-
-    console.log("Saved:", signal);
-
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "db error" });
+      await signalsCollection.insertOne({
+          time: new Date(),
+          data: payload
+      });
+      console.log("saved to MongoDB");
+  } catch (err) {
+      console.error("MongoDB save error:", err);
   }
+
+  return res.json({status:'ok'});
 });
 
-// ----------------------
-// Home test
-// ----------------------
-app.get("/", (req, res) => {
-  res.send("TradeBot Server Running ✔️");
-});
-
-// ----------------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on", PORT));
+app.listen(PORT, ()=> console.log('listening', PORT));
